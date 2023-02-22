@@ -16,12 +16,12 @@ class _ChatScreenState extends State<ChatScreen> {
   final String DOCUMENTO_MENSAGENS = "mensagens";
 
   void _sendMessage({String? texto, File? imgFile}) async {
-
     Map<String, dynamic> dados = {};
-    
-    if(imgFile != null){
+
+    if (imgFile != null) {
       String nomeArquivo = DateTime.now().millisecondsSinceEpoch.toString();
-      UploadTask task = FirebaseStorage.instance.ref().child(nomeArquivo).putFile(imgFile);
+      UploadTask task =
+          FirebaseStorage.instance.ref().child(nomeArquivo).putFile(imgFile);
 
       // captura a URL da imagem enviada ao firebase
       TaskSnapshot taskSnapshot = await task;
@@ -29,14 +29,12 @@ class _ChatScreenState extends State<ChatScreen> {
       dados['imgUrl'] = url;
     }
 
-    if(texto != null){
+    if (texto != null) {
       dados['text'] = texto;
     }
 
     // envia para o firebase
-    await FirebaseFirestore.instance
-        .collection(DOCUMENTO_MENSAGENS)
-        .add(dados);
+    await FirebaseFirestore.instance.collection(DOCUMENTO_MENSAGENS).add(dados);
   }
 
   @override
@@ -46,7 +44,38 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Text('Olá'),
         elevation: 0,
       ),
-      body: TextComposer(_sendMessage),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection(DOCUMENTO_MENSAGENS)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                switch (snapshot.connectionState) {
+                  case ConnectionState.none:
+                  case ConnectionState.waiting:
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  default:
+                    List<DocumentSnapshot> docs = snapshot.data!.docs.reversed.toList();
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      reverse: true,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          title: Text(docs[index].get('text')),
+                        );
+                      },
+                    );
+                }
+              },
+            ),
+          ),
+          TextComposer(_sendMessage),
+        ],
+      ),
     );
   }
 }

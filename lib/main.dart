@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(MyApp());
 
-  await Firebase.initializeApp();
 
   String nomeDocumento = "mensagens";
 
