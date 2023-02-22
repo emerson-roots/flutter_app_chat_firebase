@@ -1,27 +1,27 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class TextComposer extends StatefulWidget {
-
   // aula 190 -
   TextComposer(this.sendMessage, {super.key});
-  Function(String) sendMessage;
 
+  final Function({String texto, File imgFile}) sendMessage;
 
   @override
   State<TextComposer> createState() => _TextComposerState();
 }
 
 class _TextComposerState extends State<TextComposer> {
+  final TextEditingController _controller = TextEditingController();
 
-
-
-   final TextEditingController _controller = TextEditingController();
   // vai indicar se está compondo um texto ou não
   bool _isComposing = false;
 
-  void _resetFormulario(){
+  void _resetFormulario() {
     _controller.clear();
-    setState((){
+    setState(() {
       _isComposing = false;
     });
   }
@@ -33,7 +33,16 @@ class _TextComposerState extends State<TextComposer> {
       child: Row(
         children: <Widget>[
           IconButton(
-            onPressed: () {},
+            onPressed: () async {
+              XFile? file =
+                  await ImagePicker().pickImage(source: ImageSource.camera);
+
+              if (file == null) {
+                return;
+              } else {
+                widget.sendMessage(imgFile: File(file.path));
+              }
+            },
             icon: Icon(Icons.photo_camera),
           ),
           Expanded(
@@ -47,22 +56,22 @@ class _TextComposerState extends State<TextComposer> {
                   _isComposing = text.isNotEmpty;
                 });
               },
-              onSubmitted: (text) { // aula 190 - onSubmitted é o evento ao usar o botão "Enter" do próprio teclado android
-                // aula 190 - envia texto ao apertar o botão enviar do teclado invés do botão da tela
-                widget.sendMessage(text);
-
+              onSubmitted: (text) {
+                // aula 190 - onSubmitted é o evento ao usar o botão "Enter" do próprio teclado android
+                widget.sendMessage(texto: text);
                 _resetFormulario();
               },
             ),
           ),
           IconButton(
             icon: Icon(Icons.send),
-            onPressed: _isComposing ? () {
-              // uma função aqui
-              widget.sendMessage(_controller.text);
-
-              _resetFormulario();
-            } : null,
+            onPressed: _isComposing
+                ? () {
+                    // uma função aqui
+                    widget.sendMessage(texto: _controller.text);
+                    _resetFormulario();
+                  }
+                : null,
           ),
         ],
       ),
