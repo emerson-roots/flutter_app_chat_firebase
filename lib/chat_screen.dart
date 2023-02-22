@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:chat/text_composer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({Key? key}) : super(key: key);
@@ -15,8 +17,62 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final String DOCUMENTO_MENSAGENS = "mensagens";
 
+  final GoogleSignIn googleSignIn = GoogleSignIn();
+  final GlobalKey<ScaffoldMessengerState> _scafoldKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  User? _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      _currentUser = user;
+    });
+  }
+
+  Future<User?> _getUser() async {
+    if (_currentUser != null) return _currentUser;
+
+    try {
+      final GoogleSignInAccount? googleSignInAccount =
+          await googleSignIn.signIn();
+
+      // recupera token de acesso para fazer conexao com firebase
+      final GoogleSignInAuthentication googleSignInAuthentication =
+          await googleSignInAccount!.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.credential(
+          idToken: googleSignInAuthentication.idToken,
+          accessToken: googleSignInAuthentication.accessToken);
+
+      UserCredential authResult =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      User? user = authResult.user;
+      return user;
+    } catch (error) {
+      // TODO
+      // return null;
+    }
+  }
+
   void _sendMessage({String? texto, File? imgFile}) async {
-    Map<String, dynamic> dados = {};
+    final User? user = await _getUser();
+
+    if (user == null) {
+      _scafoldKey.currentState!.showSnackBar(const SnackBar(
+        content: Text('Não foi possível fazer o login. Tente novamente'),
+        backgroundColor: Colors.red,
+      ));
+    }
+
+    Map<String, dynamic> dados = {
+      "uid": user!.uid,
+      "senderName": user.displayName,
+      "senderPhotoUrl": user.photoURL
+    };
 
     if (imgFile != null) {
       String nomeArquivo = DateTime.now().millisecondsSinceEpoch.toString();
@@ -40,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scafoldKey,
       appBar: AppBar(
         title: Text('Olá'),
         elevation: 0,
@@ -59,7 +116,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: CircularProgressIndicator(),
                     );
                   default:
-                    List<DocumentSnapshot> docs = snapshot.data!.docs.reversed.toList();
+                    List<DocumentSnapshot> docs =
+                        snapshot.data!.docs.reversed.toList();
                     return ListView.builder(
                       itemCount: docs.length,
                       reverse: true,
