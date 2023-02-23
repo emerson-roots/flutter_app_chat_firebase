@@ -19,17 +19,19 @@ class _ChatScreenState extends State<ChatScreen> {
   final String DOCUMENTO_MENSAGENS = "mensagens";
 
   final GoogleSignIn googleSignIn = GoogleSignIn();
-  final GlobalKey<ScaffoldMessengerState> _scafoldKey =
-      GlobalKey<ScaffoldMessengerState>();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   User? _currentUser;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
 
     FirebaseAuth.instance.authStateChanges().listen((user) {
-      _currentUser = user;
+      setState(() {
+        _currentUser = user;
+      });
     });
   }
 
@@ -59,11 +61,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _sendMessage({String? texto, File? imgFile}) async {
+  Future<void> _sendMessage({String? texto, File? imgFile}) async {
     final User? user = await _getUser();
 
     if (user == null) {
-      _scafoldKey.currentState!.showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Não foi possível fazer o login. Tente novamente'),
         backgroundColor: Colors.red,
       ));
@@ -72,7 +74,8 @@ class _ChatScreenState extends State<ChatScreen> {
     Map<String, dynamic> dados = {
       "uid": user!.uid,
       "senderName": user.displayName,
-      "senderPhotoUrl": user.photoURL
+      "senderPhotoUrl": user.photoURL,
+      "time": Timestamp.now()
     };
 
     if (imgFile != null) {
@@ -80,10 +83,18 @@ class _ChatScreenState extends State<ChatScreen> {
       UploadTask task =
           FirebaseStorage.instance.ref().child(nomeArquivo).putFile(imgFile);
 
+      setState(() {
+        _isLoading = true;
+      });
+
       // captura a URL da imagem enviada ao firebase
       TaskSnapshot taskSnapshot = await task;
       String url = await taskSnapshot.ref.getDownloadURL();
       dados['imgUrl'] = url;
+
+      setState(() {
+        _isLoading = false;
+      });
     }
 
     if (texto != null) {
@@ -97,10 +108,27 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scafoldKey,
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: Text('Olá'),
+        centerTitle: true,
+        title: Text(_currentUser != null
+            ? 'Olá, ${_currentUser!.displayName}'
+            : 'Chat App'),
         elevation: 0,
+        actions: [
+          _currentUser != null
+              ? IconButton(
+                  onPressed: () {
+                    FirebaseAuth.instance.signOut();
+                    googleSignIn.signOut();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Logout efetuado com sucesso!'),
+                    ));
+                  },
+                  icon: Icon(Icons.exit_to_app),
+                )
+              : Container()
+        ],
       ),
       body: Column(
         children: [
@@ -108,6 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection(DOCUMENTO_MENSAGENS)
+                  .orderBy('time')
                   .snapshots(),
               builder: (context, snapshot) {
                 switch (snapshot.connectionState) {
@@ -117,14 +146,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: CircularProgressIndicator(),
                     );
                   default:
-                    List<DocumentSnapshot> docs = snapshot.data!.docs.toList();
+                    List<DocumentSnapshot> docs =
+                        snapshot.data!.docs.reversed.toList();
                     return ListView.builder(
                       itemCount: docs.length,
                       reverse: true,
                       itemBuilder: (context, index) {
                         return ChatMessage(
                           data: docs[index].data() as Map<String, dynamic>,
-                          mine: true,
+                          // determina o lado em que as mensagems irão aparecer
+                          mine: docs[index].get('uid') == _currentUser?.uid,
                         );
                       },
                     );
@@ -132,6 +163,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          _isLoading ? const LinearProgressIndicator() : Container(),
           TextComposer(_sendMessage),
         ],
       ),
